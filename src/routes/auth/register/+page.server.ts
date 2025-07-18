@@ -1,11 +1,12 @@
-import { fail, redirect } from '@sveltejs/kit';
+import { fail } from '@sveltejs/kit';
 import bcrypt from 'bcryptjs';
 import { prisma } from '$lib/prisma';
+import { withDatabaseRetry } from '$lib/database-utils';
 import { isValidEmail } from '$lib/utils';
 import type { Actions } from './$types';
 
 export const actions: Actions = {
-	register: async ({ request, cookies }) => {
+	register: async ({ request }) => {
 		const data = await request.formData();
 		const name = data.get('name')?.toString()?.trim();
 		const email = data.get('email')?.toString()?.toLowerCase().trim();
@@ -52,10 +53,12 @@ export const actions: Actions = {
 		}
 
 		try {
-			// Check if user already exists
-			const existingUser = await prisma.user.findUnique({
-				where: { email }
-			});
+			// Check if user already exists with retry logic
+			const existingUser = await withDatabaseRetry(async () => {
+				return await prisma.user.findUnique({
+					where: { email }
+				});
+			}, prisma);
 
 			if (existingUser) {
 				return fail(400, {
@@ -69,40 +72,63 @@ export const actions: Actions = {
 			// Hash password
 			const passwordHash = await bcrypt.hash(password, 10);
 
-			// Create user
-			const user = await prisma.user.create({
-				data: {
-					name,
-					email,
-					passwordHash,
-					role,
-					status: 'active'
-				}
-			});
+			// Create user with retry logic
+			const user = await withDatabaseRetry(async () => {
+				return await prisma.user.create({
+					data: {
+						name,
+						email,
+						passwordHash,
+						role,
+						status: 'active'
+					}
+				});
+			}, prisma);
 
 			// Create freelancer profile if role is freelancer
 			if (role === 'freelancer') {
-				await prisma.freelancerProfile.create({
-					data: {
-						userId: user.id,
-						bio: '',
-						skills: [],
-						portfolioLinks: []
-					}
-				});
+				await withDatabaseRetry(async () => {
+					return await prisma.freelancerProfile.create({
+						data: {
+							userId: user.id,
+							bio: '',
+							skills: [],
+							portfolioLinks: []
+						}
+					});
+				}, prisma);
 			}
 
-			// Registration successful - redirect to login
-			throw redirect(302, '/auth/login?registered=true');
+			// Registration successful - return success response to trigger client-side redirect with countdown
+			return {
+				success: true,
+				message: 'Account created successfully!'
+			};
 
 		} catch (error) {
-			if (error instanceof Error && error.message.includes('redirect')) {
-				throw error; // Re-throw redirect errors
+			console.error('Registration error:', error);
+			
+			// Check if it's a database connectivity issue
+			if (error instanceof Error && (
+				error.message.includes("Can't reach database server") ||
+				error.message.includes('database server is running') ||
+				error.message.includes('ENOTFOUND') ||
+				error.message.includes('connection refused')
+			)) {
+				return fail(503, {
+					error: 'Database temporarily unavailable. Please try again in a few moments. If the issue persists, contact support.'
+				});
 			}
 			
-			console.error('Registration error:', error);
+			// Generic database error
+			if (error instanceof Error && error.message.includes('prisma')) {
+				return fail(500, {
+					error: 'Database error occurred. Please try again later or contact support if the issue persists.'
+				});
+			}
+			
 			return fail(500, {
-				error: 'An error occurred during registration. Please try again.'
+				error: 'An unexpected error occurred during registration. Please try again.'
 			});
 		}
 	}

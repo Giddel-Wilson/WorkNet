@@ -124,7 +124,7 @@
 					<!-- Mobile menu button -->
 					<div class="lg:hidden">
 						<button 
-							onclick={toggleMobileMenu}
+							on:click={toggleMobileMenu}
 							class="text-slate-600 hover:text-slate-900 focus:outline-none focus:text-slate-900"
 							aria-label="Toggle mobile menu"
 						>

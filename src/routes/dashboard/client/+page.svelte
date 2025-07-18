@@ -1,5 +1,7 @@
 <script lang="ts">
 	import type { PageData } from './$types';
+	import DashboardNavigation from '$lib/components/DashboardNavigation.svelte';
+	import { page } from '$app/stores';
 
 	let { data }: { data: PageData } = $props();
 	const user = data.user;
@@ -8,6 +10,8 @@
 <svelte:head>
 	<title>Client Dashboard - WorkNet</title>
 </svelte:head>
+
+<DashboardNavigation {user} currentPath={$page.url.pathname} />
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="mb-8">

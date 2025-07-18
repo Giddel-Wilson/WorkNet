@@ -14,12 +14,9 @@ async function main() {
 		create: {
 			email: 'admin@worknet.com',
 			name: 'WorkNet Admin',
-			password: adminPassword,
+			passwordHash: adminPassword,
 			role: 'admin',
-			status: 'active',
-			isVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date()
+			status: 'active'
 		}
 	});
 	console.log('✅ Created admin user:', admin.email);
@@ -32,12 +29,9 @@ async function main() {
 		create: {
 			email: 'client@worknet.com',
 			name: 'John Client',
-			password: clientPassword,
+			passwordHash: clientPassword,
 			role: 'client',
-			status: 'active',
-			isVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date()
+			status: 'active'
 		}
 	});
 	console.log('✅ Created client user:', client.email);
@@ -50,12 +44,9 @@ async function main() {
 		create: {
 			email: 'freelancer@worknet.com',
 			name: 'Jane Freelancer',
-			password: freelancerPassword,
+			passwordHash: freelancerPassword,
 			role: 'freelancer',
-			status: 'active',
-			isVerified: true,
-			createdAt: new Date(),
-			updatedAt: new Date()
+			status: 'active'
 		}
 	});
 	console.log('✅ Created freelancer user:', freelancer.email);

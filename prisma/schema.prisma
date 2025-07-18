@@ -3,114 +3,64 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
-} client {
-  provider = "prisma-client-js"
-}
-
-datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
-}
-
-enum UserRole {
-  freelancer
-  client
-  admin
-}
-
-enum UserStatus {
-  active
-  suspended
-  deactivated
-}
-
-enum JobStatus {
-  open
-  in_progress
-  completed
-  flagged
-}
-
-enum ProposalStatus {
-  pending
-  accepted
-  rejected
-}
-
-enum AdminActionType {
-  USER_SUSPENDED
-  USER_REINSTATED
-  USER_DEACTIVATED
-  JOB_FLAGGED
-  JOB_UNFLAGGED
-  PROPOSAL_FLAGGED
-  CONTENT_MODERATED
 }
 
 model User {
-  id           String     @id @default(cuid())
+  id           String   @id @default(cuid())
   name         String
-  email        String     @unique
-  password     String
-  role         UserRole
-  status       UserStatus @default(active)
-  avatarUrl    String?    @map("avatar_url")
-  isVerified   Boolean    @default(false) @map("is_verified")
-  createdAt    DateTime   @default(now()) @map("created_at")
-  updatedAt    DateTime   @updatedAt @map("updated_at")
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  role         String   // "freelancer", "client", "admin"
+  status       String   @default("active") // "active", "suspended", "deactivated"
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
-  // Relationships
+  // Relations
   freelancerProfile FreelancerProfile?
   clientJobs        Job[]              @relation("ClientJobs")
-  proposals         Proposal[]
+  freelancerProposals Proposal[]       @relation("FreelancerProposals")
   sentMessages      Message[]          @relation("SentMessages")
   receivedMessages  Message[]          @relation("ReceivedMessages")
   givenReviews      Review[]           @relation("GivenReviews")
   receivedReviews   Review[]           @relation("ReceivedReviews")
-  adminLogs         AdminLog[]
 
   @@map("users")
 }
 
 model FreelancerProfile {
-  id                String   @id @default(cuid())
-  userId            String   @unique @map("user_id")
-  title             String?
-  description       String?
-  skills            String   // JSON string for skills array
-  hourlyRate        Float?   @map("hourly_rate")
-  experience        String?  // "beginner", "intermediate", "expert"
-  availability      String?  // "full-time", "part-time", "contract"
-  isAvailable       Boolean  @default(true) @map("is_available")
-  totalEarnings     Float    @default(0) @map("total_earnings")
-  completedJobs     Int      @default(0) @map("completed_jobs")
-  successRate       Float    @default(0) @map("success_rate")
-  createdAt         DateTime @default(now()) @map("created_at")
-  updatedAt         DateTime @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  userId        String   @unique @map("user_id")
+  skills        String[] // Array of skills
+  hourlyRate    Decimal? @map("hourly_rate") @db.Decimal(10, 2)
+  portfolioLinks String[] @map("portfolio_links") // Array of portfolio URLs
+  bio           String?
+  availability  String   @default("available") // "available", "busy", "unavailable"
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  // Relationships
+  // Relations
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("freelancer_profiles")
 }
 
 model Job {
-  id              String    @id @default(cuid())
-  clientId        String    @map("client_id")
-  title           String
-  description     String
-  budget          Float
-  timeline        String?
-  skills          String    // JSON string for skills array
-  experienceLevel String?   @map("experience_level") // "beginner", "intermediate", "expert"
-  status          JobStatus @default(open)
-  isRemote        Boolean   @default(true) @map("is_remote")
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
+  id          String   @id @default(cuid())
+  clientId    String   @map("client_id")
+  title       String
+  description String
+  budget      Decimal  @db.Decimal(10, 2)
+  deadline    DateTime
+  status      String   @default("open") // "open", "in_progress", "completed", "cancelled"
+  category    String?
+  skillsRequired String[] @map("skills_required")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-  // Relationships
+  // Relations
   client    User       @relation("ClientJobs", fields: [clientId], references: [id], onDelete: Cascade)
   proposals Proposal[]
   messages  Message[]
@@ -120,20 +70,19 @@ model Job {
 }
 
 model Proposal {
-  id             String         @id @default(cuid())
-  jobId          String         @map("job_id")
-  freelancerId   String         @map("freelancer_id")
-  coverLetter    String         @map("cover_letter")
-  proposedRate   Float          @map("proposed_rate")
-  estimatedHours Int?           @map("estimated_hours")
-  deliveryTime   String?        @map("delivery_time")
-  status         ProposalStatus @default(pending)
-  createdAt      DateTime       @default(now()) @map("created_at")
-  updatedAt      DateTime       @updatedAt @map("updated_at")
+  id            String   @id @default(cuid())
+  jobId         String   @map("job_id")
+  freelancerId  String   @map("freelancer_id")
+  message       String
+  proposedPrice Decimal  @map("proposed_price") @db.Decimal(10, 2)
+  status        String   @default("pending") // "pending", "accepted", "rejected", "withdrawn"
+  deliveryTime  Int?     @map("delivery_time") // Days to complete
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
 
-  // Relationships
-  job        Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  freelancer User @relation(fields: [freelancerId], references: [id], onDelete: Cascade)
+  // Relations
+  job        Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  freelancer User              @relation("FreelancerProposals", fields: [freelancerId], references: [id], onDelete: Cascade)
 
   @@map("proposals")
 }
@@ -142,12 +91,12 @@ model Message {
   id         String   @id @default(cuid())
   senderId   String   @map("sender_id")
   receiverId String   @map("receiver_id")
-  jobId      String?  @map("job_id")
+  jobId      String?  @map("job_id") // Optional - messages can be general or job-specific
   content    String
   timestamp  DateTime @default(now())
   isRead     Boolean  @default(false) @map("is_read")
 
-  // Relationships
+  // Relations
   sender   User @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiver User @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   job      Job? @relation(fields: [jobId], references: [id], onDelete: Cascade)
@@ -160,30 +109,15 @@ model Review {
   reviewerId String   @map("reviewer_id")
   revieweeId String   @map("reviewee_id")
   jobId      String   @map("job_id")
-  rating     Int // 1-5 scale
+  rating     Int      // 1-5 stars
   comment    String?
   createdAt  DateTime @default(now()) @map("created_at")
 
-  // Relationships
+  // Relations
   reviewer User @relation("GivenReviews", fields: [reviewerId], references: [id], onDelete: Cascade)
   reviewee User @relation("ReceivedReviews", fields: [revieweeId], references: [id], onDelete: Cascade)
   job      Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
 
+  @@unique([reviewerId, revieweeId, jobId]) // One review per user per job
   @@map("reviews")
-}
-
-model AdminLog {
-  id          String          @id @default(cuid())
-  adminId     String          @map("admin_id")
-  action      AdminActionType
-  targetType  String?         @map("target_type") // "user", "job", "proposal"
-  targetId    String?         @map("target_id")
-  description String
-  metadata    String?         // JSON string for additional data
-  createdAt   DateTime        @default(now()) @map("created_at")
-
-  // Relationships
-  admin User @relation(fields: [adminId], references: [id], onDelete: Cascade)
-
-  @@map("admin_logs")
 }

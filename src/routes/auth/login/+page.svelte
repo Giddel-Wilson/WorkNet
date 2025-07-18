@@ -2,23 +2,67 @@
 	import { enhance } from '$app/forms';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import type { ActionData } from './$types';
+	import { toasts } from '$lib/stores/toast';
+	import { onMount } from 'svelte';
+	import type { ActionData, SubmitFunction } from './$types';
 
 	export let form: ActionData;
+
+	// Type assertions for form data
+	$: formWithErrors = form as { error: string; fieldErrors?: Record<string, string> } | null;
 
 	let loading = false;
 	let email = '';
 	let password = '';
 
+	// Check for success messages from URL
+	$: isRegistered = $page.url.searchParams.get('registered') === 'true';
+	$: loginSuccess = $page.url.searchParams.get('success') === 'true';
+
+	// Show success toast when user was redirected from registration
+	onMount(() => {
+		if (isRegistered) {
+			toasts.success('Account created successfully! Please log in with your credentials.');
+		}
+	});
+
+	// Show error toasts when form errors occur
+	$: if (formWithErrors?.error) {
+		toasts.error(formWithErrors.error);
+	}
+
 	// Handle form submission with loading state
-	const handleSubmit = () => {
+	const handleSubmit: SubmitFunction = () => {
 		loading = true;
-		return async ({ result }) => {
+		return async ({ result, update }) => {
 			loading = false;
+			
+			console.log('Login form result:', result);
+			
+			if (result.type === 'redirect') {
+				toasts.success('Login successful! Welcome back.');
+				console.log('Redirecting to:', result.location);
+				// Immediate redirect for better UX
+				goto(result.location);
+				return;
+			}
+			
+			if (result.type === 'failure') {
+				// Handle validation errors
+				if (result.data?.error) {
+					toasts.error(result.data.error);
+				}
+				return;
+			}
+			
 			if (result.type === 'success') {
+				toasts.success('Login successful! Welcome back.');
 				const redirectTo = $page.url.searchParams.get('redirectTo') || '/dashboard';
 				goto(redirectTo);
 			}
+			
+			// Update the form with the result
+			await update();
 		};
 	};
 </script>
@@ -45,6 +89,37 @@
 
 	<div class="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
 		<div class="bg-white py-8 px-4 shadow-lg sm:rounded-lg sm:px-10">
+			<!-- Success Messages -->
+			{#if isRegistered}
+				<div class="mb-4 p-4 rounded-md bg-green-50 border border-green-200">
+					<div class="flex">
+						<div class="flex-shrink-0">
+							<svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+								<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+							</svg>
+						</div>
+						<div class="ml-3">
+							<p class="text-sm text-green-800">Registration successful! Please log in with your new account.</p>
+						</div>
+					</div>
+				</div>
+			{/if}
+
+			{#if loginSuccess}
+				<div class="mb-4 p-4 rounded-md bg-green-50 border border-green-200">
+					<div class="flex">
+						<div class="flex-shrink-0">
+							<svg class="h-5 w-5 text-green-400" viewBox="0 0 20 20" fill="currentColor">
+								<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+							</svg>
+						</div>
+						<div class="ml-3">
+							<p class="text-sm text-green-800">Login successful! Welcome back to WorkNet.</p>
+						</div>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Error Messages -->
 			{#if form?.error}
 				<div class="mb-4 p-4 rounded-md bg-red-50 border border-red-200">
@@ -80,8 +155,8 @@
 							placeholder="Enter your email"
 						/>
 					</div>
-					{#if form?.fieldErrors?.email}
-						<p class="mt-1 text-sm text-red-600">{form.fieldErrors.email}</p>
+					{#if formWithErrors?.fieldErrors?.email}
+						<p class="mt-1 text-sm text-red-600">{formWithErrors.fieldErrors.email}</p>
 					{/if}
 				</div>
 
@@ -102,8 +177,8 @@
 							placeholder="Enter your password"
 						/>
 					</div>
-					{#if form?.fieldErrors?.password}
-						<p class="mt-1 text-sm text-red-600">{form.fieldErrors.password}</p>
+					{#if formWithErrors?.fieldErrors?.password}
+						<p class="mt-1 text-sm text-red-600">{formWithErrors.fieldErrors.password}</p>
 					{/if}
 				</div>
 
@@ -150,7 +225,7 @@
 			<div class="mt-6">
 				<div class="relative">
 					<div class="absolute inset-0 flex items-center">
-						<div class="w-full border-t border-gray-300" />
+						<div class="w-full border-t border-gray-300"></div>
 					</div>
 					<div class="relative flex justify-center text-sm">
 						<span class="px-2 bg-white text-gray-500">New to WorkNet?</span>
